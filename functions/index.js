@@ -4,7 +4,7 @@ const config = require('./config.json');
 const {dialogflow, Permission} = require('actions-on-google');
 
 const app = dialogflow({
-    debug: true
+    debug: false
 });
 
 app.intent('Retrieve-Next-Arrival-Time', (conv) => {
@@ -13,7 +13,7 @@ app.intent('Retrieve-Next-Arrival-Time', (conv) => {
 
 app.intent('Welcome-Intent', (conv) => {
     const options = {
-        context: "In order to proceed, I need you location.",
+        context: "In order to proceed",
         permissions: ['DEVICE_PRECISE_LOCATION']
     };
     conv.ask(new Permission(options));
@@ -21,11 +21,8 @@ app.intent('Welcome-Intent', (conv) => {
 
 app.intent('Process-Location', (conv, params, confirmationGranted) => {
     if (confirmationGranted) {
-        if (conv.data === 'DEVICE_PRECISE_LOCATION') {
-            conv.ask('You are at ' + conv.device.location.coordiantes);
-        } else {
-            conv.ask('Wrong info sent.');
-        }
+        const coordinates = conv.device.location.coordinates
+        conv.ask('You are at ' + coordinates.longitude + ' and ' + coordinates.latitude);
     } else {
         conv.ask('Sorry, permission denied.');
     }
