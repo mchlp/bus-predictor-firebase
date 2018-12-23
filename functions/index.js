@@ -38,6 +38,24 @@ const sortStopsByDistance = (a, b) => {
     }
 };
 
+const announcePredictions = (predictionInfo) => {
+    let predictionMessage = '';
+    const predictionsList = predictionInfo.children[0];
+    predictionMessage += ' The next buses for the route ' + predictionsList.attributes.title + ' are expected to arrive in ';
+    for (let i = 0; i < predictionsList.children.length; i++) {
+        const prediction = predictionsList.children[i];
+        predictionMessage += parseMinutes(prediction.attributes.minutes);
+        if (i === predictionsList.children.length - 2) {
+            predictionMessage += ', and ';
+        } else if (i === predictionsList.children.length - 1) {
+            predictionMessage += '.';
+        } else {
+            predictionMessage += ', ';
+        }
+    }
+    return predictionMessage;
+};
+
 app.intent('Retrieve-Next-Arrival-Time', async (conv) => {
     const location = conv.user.storage.location;
     const routeBranch = conv.parameters['route-branch'];
@@ -103,27 +121,12 @@ app.intent('Retrieve-Next-Arrival-Time', async (conv) => {
             const predictionInfo = parsedPredictionData['root']['children'][0];
 
             if (predictionInfo.children.length === 1) {
-                const predictionsList = predictionInfo.children[0];
-                predictionMessage += ' The next buses for the route ' + predictionsList.attributes.title + ' are expected to arrive in ';
-                for (let i = 0; i < predictionsList.children.length; i++) {
-                    const prediction = predictionsList.children[i];
-                    predictionMessage += parseMinutes(prediction.attributes.minutes);
-                    if (i === predictionsList.children.length - 2) {
-                        predictionMessage += ', and ';
-                    } else if (i === predictionsList.children.length - 1) {
-                        predictionMessage += '.';
-                    } else {
-                        predictionMessage += ', ';
-                    }
-                }
+                predictionMessage += announcePredictions(predictionInfo);
             } else if (predictionInfo.children.length > 1) {
                 predictionMessage = ' No predictions are currently available for this stop.';
             } else {
                 predictionMessage = ' No predictions are currently available for this stop.';
             }
-
-            console.log(predictionInfo);
-
             conv.ask(predictionMessage);
         } else {
             conv.ask('The route you specified could not be found.');
@@ -134,11 +137,15 @@ app.intent('Retrieve-Next-Arrival-Time', async (conv) => {
 });
 
 app.intent('Welcome-Intent', (conv) => {
-    const options = {
-        context: "Welcome to Bus Predictor. In order to proceed",
-        permissions: ['DEVICE_PRECISE_LOCATION']
-    };
-    conv.ask(new Permission(options));
+    if (!conv.user.storage.location) {
+        const options = {
+            context: "Welcome to Bus Predictor. In order to proceed",
+            permissions: ['DEVICE_PRECISE_LOCATION']
+        };
+        conv.ask(new Permission(options));
+    } else {
+        conv.ask('Welcome to Bus Predictor. I am using your previously saved location. Waiting for your command...');
+    }
 });
 
 app.intent('Process-Location', async (conv, params, confirmationGranted) => {
@@ -149,16 +156,30 @@ app.intent('Process-Location', async (conv, params, confirmationGranted) => {
         if (resData['status'] === 'OK') {
             conv.ask('Your location was detected as ' + resData['results'][0]['formatted_address'] + '. Is this correct or close to your current location?');
         } else {
-            conv.ask('Your location could not be determined.');
+            conv.close('Your location could not be determined.');
         }
     } else {
-        conv.ask('Sorry, permission denied.');
+        conv.close('Sorry, you denied permission to access your location.');
     }
 });
 
 app.intent('Process-Location-Yes', (conv) => {
     conv.user.storage.location = [conv.device.location.coordinates.latitude, conv.device.location.coordinates.longitude];
-    conv.ask('Alright. Your location has been saved.');
+    conv.ask('Great. Would you like to save your location for the future?');
+});
+
+app.intent('Save-Location-Yes', (conv) => {
+    conv.user.storage.location = [conv.device.location.coordinates.latitude, conv.device.location.coordinates.longitude];
+    conv.ask('Alright. Your location has been saved. To clear you location in the future, just say "clear location"');
+});
+
+app.intent('Clear-Location', (conv) => {
+    conv.user.storage.location = null;
+    const options = {
+        context: "Welcome to Bus Predictor. In order to proceed",
+        permissions: ['DEVICE_PRECISE_LOCATION']
+    };
+    conv.close('Your location has been cleared. Goodbye.');
 });
 
 exports.dialogflowHandler = functions.https.onRequest(app);
