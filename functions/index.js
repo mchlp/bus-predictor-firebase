@@ -3,7 +3,7 @@ const googlePolyline = require('google-polyline');
 const axios = require('axios');
 const config = require('./config.json');
 const xmlParser = require('xml-parser');
-const { dialogflow, Permission } = require('actions-on-google');
+const { dialogflow, Permission, RegisterUpdate } = require('actions-on-google');
 
 const globals = {
     apiKey: config['cloud-platform']['api-key'],
@@ -40,23 +40,53 @@ const sortStopsByDistance = (a, b) => {
 
 const announcePredictions = (predictionInfo) => {
     let predictionMessage = '';
-    const predictionsList = predictionInfo.children[0];
-    predictionMessage += ' The next buses for the route ' + predictionsList.attributes.title + ' are expected to arrive in ';
-    for (let i = 0; i < predictionsList.children.length; i++) {
-        const prediction = predictionsList.children[i];
-        predictionMessage += parseMinutes(prediction.attributes.minutes);
-        if (i === predictionsList.children.length - 2) {
-            predictionMessage += ', and ';
-        } else if (i === predictionsList.children.length - 1) {
-            predictionMessage += '.';
-        } else {
-            predictionMessage += ', ';
+    if (predictionInfo.children.length > 0) {
+        if (predictionInfo.children.length > 1) {
+            predictionMessage += ' There are ' + predictionInfo.children.length + ' branches from the route ' + predictionInfo.attributes.routeTag + ' that serve this stop.';
         }
+        for (let i = 0; i < predictionInfo.children.length; i++) {
+            const predictionsList = predictionInfo.children[i];
+            predictionMessage += ' The next buses for the route ' + predictionsList.attributes.title + ' are expected to arrive in ';
+            for (let i = 0; i < predictionsList.children.length; i++) {
+                const prediction = predictionsList.children[i];
+                predictionMessage += parseMinutes(prediction.attributes.minutes);
+                if (i === predictionsList.children.length - 2) {
+                    predictionMessage += ', and ';
+                } else if (i === predictionsList.children.length - 1) {
+                    predictionMessage += '.';
+                } else {
+                    predictionMessage += ', ';
+                }
+            }
+        }
+    } else {
+        predictionMessage = ' No predictions are currently available for this stop.';
     }
     return predictionMessage;
 };
 
-app.intent('Retrieve-Next-Arrival-Time', async (conv) => {
+app.intent('Retrieve-Next-Arrival-Time-By-Stop', async (conv) => {
+    const stopId = conv.parameters['Stop-ID']['stop-id'];
+    const predictionRes = await axios.get(globals.nextBusUrl + '?command=predictions&a=' + globals.agency + '&stopId=' + stopId);
+    const parsedPredictionData = xmlParser(predictionRes.data);
+    const predictionInfoList = parsedPredictionData['root']['children'];
+    let predictionMessage = 'Here are the predictions for ' + predictionInfoList[0].attributes.stopTitle + '. ';
+    if (predictionInfoList.length === 0) {
+        predictionMessage += ' No predictions are currently available for this stop.';
+    } else {
+        for (let i = 0; i < predictionInfoList.length; i++) {
+            if (predictionInfoList[i].children.length > 0) {
+                if (predictionInfoList[i].children.length === 1) {
+                    predictionMessage += ' There is one branch from the route ' + predictionInfoList[i].attributes.routeTag + ' that serves this stop.';
+                }
+                predictionMessage += announcePredictions(predictionInfoList[i]);
+            }
+        }
+    }
+    conv.tell(predictionMessage);
+});
+
+app.intent('Retrieve-Next-Arrival-Time-By-Route', async (conv) => {
     const location = conv.user.storage.location;
     const routeBranch = conv.parameters['route-branch'];
     const routeNum = routeBranch['branch-number'];
@@ -119,14 +149,7 @@ app.intent('Retrieve-Next-Arrival-Time', async (conv) => {
             const predictionRes = await axios.get(globals.nextBusUrl + '?command=predictions&a=' + globals.agency + '&r=' + routeNum + '&s=' + minStop.tag);
             const parsedPredictionData = xmlParser(predictionRes.data);
             const predictionInfo = parsedPredictionData['root']['children'][0];
-
-            if (predictionInfo.children.length === 1) {
-                predictionMessage += announcePredictions(predictionInfo);
-            } else if (predictionInfo.children.length > 1) {
-                predictionMessage = ' No predictions are currently available for this stop.';
-            } else {
-                predictionMessage = ' No predictions are currently available for this stop.';
-            }
+            predictionMessage += announcePredictions(predictionInfo);
             conv.ask(predictionMessage);
         } else {
             conv.ask('The route you specified could not be found.');
@@ -170,15 +193,11 @@ app.intent('Process-Location-Yes', (conv) => {
 
 app.intent('Save-Location-Yes', (conv) => {
     conv.user.storage.location = [conv.device.location.coordinates.latitude, conv.device.location.coordinates.longitude];
-    conv.ask('Alright. Your location has been saved. To clear you location in the future, just say "clear location"');
+    conv.ask('Alright. Your location has been saved. To clear you location in the future, just say "clear location". For help, just say "help". Waiting for your command...');
 });
 
 app.intent('Clear-Location', (conv) => {
     conv.user.storage.location = null;
-    const options = {
-        context: "Welcome to Bus Predictor. In order to proceed",
-        permissions: ['DEVICE_PRECISE_LOCATION']
-    };
     conv.close('Your location has been cleared. Goodbye.');
 });
 
