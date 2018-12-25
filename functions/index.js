@@ -3,7 +3,7 @@ const googlePolyline = require('google-polyline');
 const axios = require('axios');
 const config = require('./config.json');
 const xmlParser = require('xml-parser');
-const { dialogflow, Permission, RegisterUpdate } = require('actions-on-google');
+const { dialogflow, Permission } = require('actions-on-google');
 
 const globals = {
     apiKey: config['cloud-platform']['api-key'],
@@ -13,7 +13,7 @@ const globals = {
 };
 
 const app = dialogflow({
-    debug: false
+    debug: true
 });
 
 const parseMinutes = (minutes) => {
@@ -201,17 +201,16 @@ app.intent('Clear-Location', (conv) => {
     conv.close('Your location has been cleared. Goodbye.');
 });
 
-exports.dialogflowHandler = functions.https.onRequest(app);
-
-exports.api = functions.https.onRequest((req, res) => {
+exports.dialogflowHandler = functions.https.onRequest((req, res) => {
+    const headers = req.headers;
     if (req.method === 'POST') {
-        const body = req.body;
-        const headers = req.headers;
         if (headers.key === config.key) {
-            res.send('Authorized');
+            app(req, res);
         } else {
+            console.log('Unauthorized access attempted.');
             res.status(401).send("Unauthorized.");
         }
+    } else {
+        res.send("Bus-Predictor API.");
     }
-    res.send("Bus-Predictor API.");
 });
