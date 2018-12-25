@@ -20,7 +20,7 @@ const globals = {
 };
 
 const app = dialogflow({
-    debug: false
+    debug: true
 });
 
 const parseMinutes = (minutes) => {
@@ -77,12 +77,6 @@ app.intent('Retrieve-Next-Arrival-Time-By-Stop', async (conv) => {
     const predictionRes = await axios.get(globals.nextBusUrl + '?command=predictions&a=' + globals.agency + '&stopId=' + stopId);
     const parsedPredictionData = xmlParser(predictionRes.data);
     const predictionInfoList = parsedPredictionData['root']['children'];
-    console.log(admin.database());
-    let newQuery = admin.database().ref('/queries/by-stop').push();
-    newQuery.set({
-        'time-stamp': Date.now(),
-        'stop-id': stopId
-    });
     let predictionMessage = '';
     if (predictionInfoList.length > 0) {
         predictionMessage += 'Here are the predictions for ' + predictionInfoList[0].attributes.stopTitle + '. ';
