@@ -83,7 +83,7 @@ app.intent('Retrieve-Next-Arrival-Time-By-Stop', async (conv) => {
             }
         }
     }
-    conv.tell(predictionMessage);
+    conv.close(predictionMessage);
 });
 
 app.intent('Retrieve-Next-Arrival-Time-By-Route', async (conv) => {
@@ -150,12 +150,12 @@ app.intent('Retrieve-Next-Arrival-Time-By-Route', async (conv) => {
             const parsedPredictionData = xmlParser(predictionRes.data);
             const predictionInfo = parsedPredictionData['root']['children'][0];
             predictionMessage += announcePredictions(predictionInfo);
-            conv.ask(predictionMessage);
+            conv.close(predictionMessage);
         } else {
-            conv.ask('The route you specified could not be found.');
+            conv.close('The route you specified could not be found.');
         }
     } else {
-        conv.ask('The route you specified could not be found.');
+        conv.close('The route you specified could not be found.');
     }
 });
 
