@@ -1,9 +1,16 @@
 const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 const googlePolyline = require('google-polyline');
 const axios = require('axios');
 const config = require('./config.json');
 const xmlParser = require('xml-parser');
 const { dialogflow, Permission } = require('actions-on-google');
+const serviceAccount = require("./serviceAccountKey.json");
+
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: config['db']['url']
+});
 
 const globals = {
     apiKey: config['cloud-platform']['api-key'],
@@ -13,7 +20,7 @@ const globals = {
 };
 
 const app = dialogflow({
-    debug: true
+    debug: false
 });
 
 const parseMinutes = (minutes) => {
@@ -70,18 +77,29 @@ app.intent('Retrieve-Next-Arrival-Time-By-Stop', async (conv) => {
     const predictionRes = await axios.get(globals.nextBusUrl + '?command=predictions&a=' + globals.agency + '&stopId=' + stopId);
     const parsedPredictionData = xmlParser(predictionRes.data);
     const predictionInfoList = parsedPredictionData['root']['children'];
-    let predictionMessage = 'Here are the predictions for ' + predictionInfoList[0].attributes.stopTitle + '. ';
-    if (predictionInfoList.length === 0) {
-        predictionMessage += ' No predictions are currently available for this stop.';
-    } else {
-        for (let i = 0; i < predictionInfoList.length; i++) {
-            if (predictionInfoList[i].children.length > 0) {
-                if (predictionInfoList[i].children.length === 1) {
-                    predictionMessage += ' There is one branch from the route ' + predictionInfoList[i].attributes.routeTag + ' that serves this stop.';
+    console.log(admin.database());
+    let newQuery = admin.database().ref('/queries/by-stop').push();
+    newQuery.set({
+        'time-stamp': Date.now(),
+        'stop-id': stopId
+    });
+    let predictionMessage = '';
+    if (predictionInfoList.length > 0) {
+        predictionMessage += 'Here are the predictions for ' + predictionInfoList[0].attributes.stopTitle + '. ';
+        if (predictionInfoList.length === 0) {
+            predictionMessage += ' No predictions are currently available for this stop.';
+        } else {
+            for (let i = 0; i < predictionInfoList.length; i++) {
+                if (predictionInfoList[i].children.length > 0) {
+                    if (predictionInfoList[i].children.length === 1) {
+                        predictionMessage += ' There is one branch from the route ' + predictionInfoList[i].attributes.routeTag + ' that serves this stop.';
+                    }
+                    predictionMessage += announcePredictions(predictionInfoList[i]);
                 }
-                predictionMessage += announcePredictions(predictionInfoList[i]);
             }
         }
+    } else {
+        predictionMessage += 'That is not a valid stop.';
     }
     conv.close(predictionMessage);
 });
