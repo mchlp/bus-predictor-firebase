@@ -80,17 +80,18 @@ app.intent('Retrieve-Next-Arrival-Time-By-Stop', async (conv) => {
     let predictionMessage = '';
     if (predictionInfoList.length > 0) {
         predictionMessage += 'Here are the predictions for ' + predictionInfoList[0].attributes.stopTitle + '. ';
-        if (predictionInfoList.length === 0) {
-            predictionMessage += ' No predictions are currently available for this stop.';
-        } else {
-            for (let i = 0; i < predictionInfoList.length; i++) {
-                if (predictionInfoList[i].children.length > 0) {
-                    if (predictionInfoList[i].children.length === 1) {
-                        predictionMessage += ' There is one branch from the route ' + predictionInfoList[i].attributes.routeTag + ' that serves this stop.';
-                    }
-                    predictionMessage += announcePredictions(predictionInfoList[i]);
+        foundBus = false;
+        for (let i = 0; i < predictionInfoList.length; i++) {
+            if (predictionInfoList[i].children.length > 0) {
+                if (predictionInfoList[i].children.length === 1) {
+                    predictionMessage += ' There is one branch from the route ' + predictionInfoList[i].attributes.routeTag + ' that serves this stop.';
                 }
+                foundBus = true;
+                predictionMessage += announcePredictions(predictionInfoList[i]);
             }
+        }
+        if (!foundBus) {
+            predictionMessage += ' No predictions are currently available for this stop.';
         }
     } else {
         predictionMessage += 'That is not a valid stop.';
